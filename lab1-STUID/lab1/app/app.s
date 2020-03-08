@@ -2,7 +2,7 @@
 
 .global start
 start:
-	pushl $14
+	pushl $13
 	pushl $message
 	calll displayStr
 loop:
@@ -17,8 +17,8 @@ message:
 displayStr:
 	movl 4(%esp), %ebx
 	movl 8(%esp), %ecx
-	movl $0, %edi
-	movb $0xf0, %ah
+	movl $((80*5+0)*2), %edi
+	movb $0x0c, %ah
 nextChar:
 	movb (%ebx), %al
 	movw %ax, %gs:(%edi)
