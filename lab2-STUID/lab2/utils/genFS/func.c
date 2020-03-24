@@ -754,7 +754,7 @@ int rmdir(const char *driver, const char *destDirPath)
  */
 int cp(const char *driver, const char *srcFilePath, const char *destFilePath)
 {
-    // TODO in lab2
+    // TODO in lab2 done
     FILE *file = NULL;
     FILE *fileSrc = NULL;
     char tmp = 0;
