@@ -86,6 +86,7 @@ void printf(const char *format, ...)
 		//TODO in lab2
 		if (format[i] == '%')
 		{
+			++i;
 			--count;
 			switch (format[i])
 			{
