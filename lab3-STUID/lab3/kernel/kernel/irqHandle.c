@@ -221,7 +221,51 @@ void syscallPrint(struct TrapFrame *tf)
 
 void syscallFork(struct TrapFrame *tf)
 {
-	// TODO in lab3
+	// TODO in lab3 done
+	int pid;
+	for (pid = 0; pid < MAX_PCB_NUM; pid++)
+	{
+		if (pcb[pid].state == STATE_DEAD)
+		{
+			break;
+		}
+	}
+	if (pid != MAX_PCB_NUM)
+	{
+		pcb[pid].stackTop = (uint32_t) & (pcb[pid].stackTop) - sizeof(struct TrapFrame);
+		pcb[pid].state = STATE_RUNNABLE;
+		pcb[pid].timeCount = pcb[current].timeCount;
+		pcb[pid].sleepTime = pcb[current].sleepTime;
+		pcb[pid].pid = pid;
+
+		pcb[pid].regs.cs = USEL(2 * i + 1);
+		pcb[pid].regs.ds = USEL(2 * i + 2);
+		pcb[pid].regs.ss = USEL(2 * i + 2);
+		pcb[pid].regs.gs = pcb[current].regs.gs;
+		pcb[pid].regs.fs = pcb[current].regs.fs;
+		pcb[pid].regs.es = pcb[current].regs.es;
+		pcb[pid].regs.edi = pcb[current].regs.edi;
+		pcb[pid].regs.esi = pcb[current].regs.esi;
+		pcb[pid].regs.ebp = pcb[current].regs.ebp;
+		pcb[pid].regs.xxx = pcb[current].regs.xxx;
+		pcb[pid].regs.ebx = pcb[current].regs.ebx;
+		pcb[pid].regs.edx = pcb[current].regs.edx;
+		pcb[pid].regs.ecx = pcb[current].regs.ecx;
+		pcb[pid].regs.eax = pcb[current].regs.eax;
+		pcb[pid].regs.irq = pcb[current].regs.irq;
+		pcb[pid].regs.error = pcb[current].regs.error;
+		pcb[pid].regs.eip = pcb[current].regs.eip;
+		pcb[pid].regs.eflags = pcb[current].regs.eflags;
+		pcb[pid].regs.esp = pcb[current].regs.esp;
+
+		// reture value
+		pcb[pid].regs.eax = 0;
+		pcb[current].regs.eax = i;
+	}
+	else
+	{
+		pcb[current].regs.eax = -1;
+	}
 	return;
 }
 
@@ -234,13 +278,21 @@ void syscallExec(struct TrapFrame *tf)
 
 void syscallSleep(struct TrapFrame *tf)
 {
-	// TODO in lab3
+	// TODO in lab3 done
+	if (tf->ecx > 0)
+	{
+		pcb[current].state = STATE_BLOCKED;
+		pcb[current].sleepTime = tf->ecx;
+		asm volatile("int $0x20");
+	}
 	return;
 }
 
 void syscallExit(struct TrapFrame *tf)
 {
-	// TODO in lab3
+	// TODO in lab3 done
+	pcb[current].state = STATE_DEAD;
+	asm volatile("int $0x20");
 	return;
 }
 
