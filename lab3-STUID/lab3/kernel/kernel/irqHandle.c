@@ -25,65 +25,129 @@ void GProtectFaultHandle(struct TrapFrame *tf);
 void timerHandle(struct TrapFrame *tf);
 void keyboardHandle(struct TrapFrame *tf);
 
-void irqHandle(struct TrapFrame *tf) { // pointer tf = esp
+void irqHandle(struct TrapFrame *tf)
+{ // pointer tf = esp
 	/*
 	 * 中断处理程序
 	 */
 	/* Reassign segment register */
-	asm volatile("movw %%ax, %%ds"::"a"(KSEL(SEG_KDATA)));
+	asm volatile("movw %%ax, %%ds" ::"a"(KSEL(SEG_KDATA)));
 
 	uint32_t tmpStackTop = pcb[current].stackTop;
 	pcb[current].prevStackTop = pcb[current].stackTop;
 	pcb[current].stackTop = (uint32_t)tf;
 
-	switch(tf->irq) {
-		case -1:
-			break;
-		case 0xd:
-			GProtectFaultHandle(tf); // return
-			break;
-		case 0x20:
-			timerHandle(tf);         // return or iret
-			break;
-		case 0x21:
-			keyboardHandle(tf);      // return
-			break;
-		case 0x80:
-			syscallHandle(tf);       // return
-			break;
-		default:assert(0);
+	switch (tf->irq)
+	{
+	case -1:
+		break;
+	case 0xd:
+		GProtectFaultHandle(tf); // return
+		break;
+	case 0x20:
+		timerHandle(tf); // return or iret
+		break;
+	case 0x21:
+		keyboardHandle(tf); // return
+		break;
+	case 0x80:
+		syscallHandle(tf); // return
+		break;
+	default:
+		assert(0);
 	}
 
 	pcb[current].stackTop = tmpStackTop;
 }
 
-void syscallHandle(struct TrapFrame *tf) {
-	switch(tf->eax) { // syscall number
-		case 0:
-			syscallWrite(tf);
-			break; // for SYS_WRITE
-		case 1:
-			syscallFork(tf);
-			break; // for SYS_FORK
-		case 2:
-			syscallExec(tf);
-			break; // for SYS_EXEC
-		case 3:
-			syscallSleep(tf);
-			break; // for SYS_SLEEP
-		case 4:
-			syscallExit(tf);
-			break; // for SYS_EXIT
-		default:break;
+void syscallHandle(struct TrapFrame *tf)
+{
+	switch (tf->eax)
+	{ // syscall number
+	case 0:
+		syscallWrite(tf);
+		break; // for SYS_WRITE
+	case 1:
+		syscallFork(tf);
+		break; // for SYS_FORK
+	case 2:
+		syscallExec(tf);
+		break; // for SYS_EXEC
+	case 3:
+		syscallSleep(tf);
+		break; // for SYS_SLEEP
+	case 4:
+		syscallExit(tf);
+		break; // for SYS_EXIT
+	default:
+		break;
 	}
 }
 
-void timerHandle(struct TrapFrame *tf) {
-	// TODO in lab3
+void timerHandle(struct TrapFrame *tf)
+{
+	// TODO in lab3 done
+	uint32_t tmpStackTop;
+	int pid;
+	for (int i = 1; i < MAX_PCB_NUM; i++)
+	{
+		pid = (i + current) % MAX_PCB_NUM;
+		if (pcb[pid].state == STATE_BLOCKED && pcb[pid].sleeptime > 0)
+		{
+			--pcb[pid].sleeptime;
+			if (pcb[pid].sleeptime == 0)
+			{
+				pcb[pid].state = STATE_RUNNABLE;
+			}
+		}
+	}
+
+	if (pcb[current].state == STATE_RUNNING && pcb[current].timeCount < MAX_TIME_COUNT)
+	{
+		++pcb[current].timeCount;
+	}
+	else
+	{
+		if (pcb[current].state == STATE_RUNNING)
+		{
+			pcb[current].state = STATE_RUNNABLE;
+			pcb[current].timeCount = 0;
+		}
+
+		for (int i = 1; i < MAX_PCB_NUM; i++)
+		{
+			pid = (i + current) % MAX_PCB_NUM;
+			if (pid != 0 && pcb[pid].state == STATE_RUNNABLE)
+			{
+				break;
+			}
+		}
+		if (pcb[pid].state != STATE_RUNNABLE)
+		{
+			pid = 0;
+		}
+		current = pid;
+	}
+
+	pcb[current].state = STATE_RUNNING;
+	pcb[current].timeCount = 1;
+
+	tmpStackTop = pcb[current].stackTop;
+	pcb[current].stackTop = pcb[current].prevStackTop;
+	tss.esp0 = (uint32_t) & (pcb[current].stackTop);
+	asm volatile("movl %0, %%esp" ::"m"(tmpStackTop)); // switch kernel stack
+	asm volatile("popl %gs");
+	asm volatile("popl %fs");
+	asm volatile("popl %es");
+	asm volatile("popl %ds");
+	asm volatile("popal");
+	asm volatile("addl $8, %esp");
+	asm volatile("iret");
 	return;
 }
 
-void keyboardHandle(struct TrapFrame *tf) {
+void keyboardHandle(struct TrapFrame *tf)
+{
 	uint32_t keyCode = getKeyCode();
 	if (keyCode == 0)
 		return;
@@ -93,16 +157,20 @@ void keyboardHandle(struct TrapFrame *tf) {
 	return;
 }
 
-void syscallWrite(struct TrapFrame *tf) {
-	switch(tf->ecx) { // file descriptor
-		case 0:
-			syscallPrint(tf);
-			break; // for STD_OUT
-		default:break;
+void syscallWrite(struct TrapFrame *tf)
+{
+	switch (tf->ecx)
+	{ // file descriptor
+	case 0:
+		syscallPrint(tf);
+		break; // for STD_OUT
+	default:
+		break;
 	}
 }
 
-void syscallPrint(struct TrapFrame *tf) {
+void syscallPrint(struct TrapFrame *tf)
+{
 	int sel = tf->ds; //TODO segment selector for user data, need further modification
 	char *str = (char *)tf->edx;
 	int size = tf->ebx;
@@ -110,27 +178,35 @@ void syscallPrint(struct TrapFrame *tf) {
 	int pos = 0;
 	char character = 0;
 	uint16_t data = 0;
-	asm volatile("movw %0, %%es"::"m"(sel));
-	for (i = 0; i < size; i++) {
-		asm volatile("movb %%es:(%1), %0":"=r"(character):"r"(str + i));
-		if (character == '\n') {
+	asm volatile("movw %0, %%es" ::"m"(sel));
+	for (i = 0; i < size; i++)
+	{
+		asm volatile("movb %%es:(%1), %0"
+					 : "=r"(character)
+					 : "r"(str + i));
+		if (character == '\n')
+		{
 			displayRow++;
 			displayCol = 0;
-			if (displayRow == 25){
+			if (displayRow == 25)
+			{
 				displayRow = 24;
 				displayCol = 0;
 				scrollScreen();
 			}
 		}
-		else {
+		else
+		{
 			data = character | (0x0c << 8);
 			pos = (80 * displayRow + displayCol) * 2;
-			asm volatile("movw %0, (%1)"::"r"(data),"r"(pos + 0xb8000));
+			asm volatile("movw %0, (%1)" ::"r"(data), "r"(pos + 0xb8000));
 			displayCol++;
-			if (displayCol == 80){
+			if (displayCol == 80)
+			{
 				displayRow++;
 				displayCol = 0;
-				if (displayRow == 25){
+				if (displayRow == 25)
+				{
 					displayRow = 24;
 					displayCol = 0;
 					scrollScreen();
@@ -138,33 +214,38 @@ void syscallPrint(struct TrapFrame *tf) {
 			}
 		}
 	}
-	
+
 	updateCursor(displayRow, displayCol);
 	//TODO take care of return value
 }
 
-void syscallFork(struct TrapFrame *tf) {
+void syscallFork(struct TrapFrame *tf)
+{
 	// TODO in lab3
 	return;
 }
 
-void syscallExec(struct TrapFrame *tf) {
+void syscallExec(struct TrapFrame *tf)
+{
 	// TODO in lab3
 	// hint: ret = loadElf(tmp, (current + 1) * 0x100000, &entry);
 	return;
 }
 
-void syscallSleep(struct TrapFrame *tf) {
+void syscallSleep(struct TrapFrame *tf)
+{
 	// TODO in lab3
 	return;
 }
 
-void syscallExit(struct TrapFrame *tf) {
+void syscallExit(struct TrapFrame *tf)
+{
 	// TODO in lab3
 	return;
 }
 
-void GProtectFaultHandle(struct TrapFrame *tf){
+void GProtectFaultHandle(struct TrapFrame *tf)
+{
 	assert(0);
 	return;
 }
