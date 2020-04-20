@@ -92,10 +92,10 @@ void timerHandle(struct TrapFrame *tf)
 	for (int i = 1; i < MAX_PCB_NUM; i++)
 	{
 		pid = (i + current) % MAX_PCB_NUM;
-		if (pcb[pid].state == STATE_BLOCKED && pcb[pid].sleeptime > 0)
+		if (pcb[pid].state == STATE_BLOCKED && pcb[pid].sleepTime > 0)
 		{
-			--pcb[pid].sleeptime;
-			if (pcb[pid].sleeptime == 0)
+			--pcb[pid].sleepTime;
+			if (pcb[pid].sleepTime == 0)
 			{
 				pcb[pid].state = STATE_RUNNABLE;
 			}
@@ -127,22 +127,23 @@ void timerHandle(struct TrapFrame *tf)
 			pid = 0;
 		}
 		current = pid;
+
+		pcb[current].state = STATE_RUNNING;
+		pcb[current].timeCount = 1;
+
+		tmpStackTop = pcb[current].stackTop;
+		pcb[current].stackTop = pcb[current].prevStackTop;
+		tss.esp0 = (uint32_t) & (pcb[current].stackTop);
+		asm volatile("movl %0, %%esp" ::"m"(tmpStackTop)); // switch kernel stack
+		asm volatile("popl %gs");
+		asm volatile("popl %fs");
+		asm volatile("popl %es");
+		asm volatile("popl %ds");
+		asm volatile("popal");
+		asm volatile("addl $8, %esp");
+		asm volatile("iret");
 	}
 
-	pcb[current].state = STATE_RUNNING;
-	pcb[current].timeCount = 1;
-
-	tmpStackTop = pcb[current].stackTop;
-	pcb[current].stackTop = pcb[current].prevStackTop;
-	tss.esp0 = (uint32_t) & (pcb[current].stackTop);
-	asm volatile("movl %0, %%esp" ::"m"(tmpStackTop)); // switch kernel stack
-	asm volatile("popl %gs");
-	asm volatile("popl %fs");
-	asm volatile("popl %es");
-	asm volatile("popl %ds");
-	asm volatile("popal");
-	asm volatile("addl $8, %esp");
-	asm volatile("iret");
 	return;
 }
 
@@ -222,7 +223,7 @@ void syscallPrint(struct TrapFrame *tf)
 void syscallFork(struct TrapFrame *tf)
 {
 	// TODO in lab3 done
-	int pid;
+	int pid,j;
 	for (pid = 0; pid < MAX_PCB_NUM; pid++)
 	{
 		if (pcb[pid].state == STATE_DEAD)
@@ -232,15 +233,24 @@ void syscallFork(struct TrapFrame *tf)
 	}
 	if (pid != MAX_PCB_NUM)
 	{
+		enableInterrupt();
+		for (j = 0; j < 0x100000; j++) {
+			*(uint8_t *)(j + (pid+1)*0x100000) = *(uint8_t *)(j + (current+1)*0x100000);
+			//asm volatile("int $0x20"); //XXX Testing irqTimer during syscall
+		}
+		/*XXX disable interrupt
+		 */
+		disableInterrupt();
+		
 		pcb[pid].stackTop = (uint32_t) & (pcb[pid].stackTop) - sizeof(struct TrapFrame);
 		pcb[pid].state = STATE_RUNNABLE;
 		pcb[pid].timeCount = pcb[current].timeCount;
 		pcb[pid].sleepTime = pcb[current].sleepTime;
 		pcb[pid].pid = pid;
 
-		pcb[pid].regs.cs = USEL(2 * i + 1);
-		pcb[pid].regs.ds = USEL(2 * i + 2);
-		pcb[pid].regs.ss = USEL(2 * i + 2);
+		pcb[pid].regs.cs = USEL(2 * pid + 1);
+		pcb[pid].regs.ds = USEL(2 * pid + 2);
+		pcb[pid].regs.ss = USEL(2 * pid + 2);
 		pcb[pid].regs.gs = pcb[current].regs.gs;
 		pcb[pid].regs.fs = pcb[current].regs.fs;
 		pcb[pid].regs.es = pcb[current].regs.es;
@@ -260,7 +270,7 @@ void syscallFork(struct TrapFrame *tf)
 
 		// reture value
 		pcb[pid].regs.eax = 0;
-		pcb[current].regs.eax = i;
+		pcb[current].regs.eax = pid;
 	}
 	else
 	{
@@ -271,8 +281,36 @@ void syscallFork(struct TrapFrame *tf)
 
 void syscallExec(struct TrapFrame *tf)
 {
-	// TODO in lab3
+	// TODO in lab3 done
 	// hint: ret = loadElf(tmp, (current + 1) * 0x100000, &entry);
+	char filename[100];
+	uint32_t entry;
+
+	int sel = tf->ds;
+	char *str = (char *)tf->ecx;
+	// int size = tf->ebx;
+	char character = 0;
+	asm volatile("movw %0, %%es" ::"m"(sel));
+	for (int i = 0; i < 100; i++)
+	{
+		asm volatile("movb %%es:(%1), %0"
+					 : "=r"(character)
+					 : "r"(str + i));
+		filename[i] = character;
+		if (character == 0)
+			break;
+	}
+	int res = loadElf(filename, (current + 1) * 0x100000, &entry);
+
+	if (res == 0)
+	{
+		pcb[current].regs.eip = entry;
+	}
+	else
+	{
+		pcb[current].regs.eax = -1;
+	}
+
 	return;
 }
 
