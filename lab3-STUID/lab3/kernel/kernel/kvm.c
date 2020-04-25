@@ -73,10 +73,16 @@ void initFS()
 int loadElf(const char *filename, uint32_t physAddr, uint32_t *entry)
 {
 	// TODO in lab3 done
-	int i = 0;
-	int phoff = 0x34;						 // program header offset
-	int offset = 0x1000;					 // .text section offset
-	uint32_t elf = 0x100000 * (current + 1); // physical memory addr to load
+	struct
+	{
+		uint32_t off;
+		uint32_t vaddr;
+		uint32_t filesz;
+		uint32_t memsz;
+	} pht[256];
+
+	int phoff;				 // program header offset
+	uint32_t elf = physAddr; // physical memory addr to load
 	int ret = 0;
 	Inode inode;
 	int inodeOffset = 0;
@@ -88,21 +94,44 @@ int loadElf(const char *filename, uint32_t physAddr, uint32_t *entry)
 		return ret;
 	}
 
-	for (i = 0; i < inode.blockCount; i++)
+	for (int i = 0; i < inode.blockCount; i++)
 	{
 		readBlock(&sBlock, &inode, i, (uint8_t *)(elf + i * sBlock.blockSize));
 	}
-
 	*entry = ((struct ELFHeader *)elf)->entry; // entry address of the program
 	phoff = ((struct ELFHeader *)elf)->phoff;
-	offset = ((struct ProgramHeader *)(elf + phoff))->off;
 
-	for (i = 0; i < 200 * 512; i++)
+	struct ProgramHeader *ph;
+	ph = (void *)elf + phoff;
+	int phcount = ((struct ELFHeader *)elf)->phnum;
+	
+	for (int i = 0; i < phcount; i++)
 	{
-		*(uint8_t *)(elf + i) = *(uint8_t *)(elf + i + offset);
+		if (ph->type == 1)
+		{
+			pht[phcount].vaddr = ph->vaddr;
+			pht[phcount].off = ph->off;
+			pht[phcount].memsz = ph->memsz;
+			pht[phcount].filesz = ph->filesz;
+		}
+		ph++;
 	}
 
-	// enterUserSpace(uMainEntry);
+	for (int i = 0; i < phcount; i++)
+	{
+		for (int j = 0; j < ph->memsz; j++)
+		{
+			if (j < ph->filesz)
+			{
+				*(uint8_t *)(elf +pht[i].vaddr + j) = *(uint8_t *)(elf + pht[i].off + j);
+			}
+			else
+			{
+				*(uint8_t *)(elf + pht[i].vaddr + j) = 0;
+			}
+		}
+	}
+
 	return ret;
 }
 
