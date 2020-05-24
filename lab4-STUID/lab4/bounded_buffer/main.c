@@ -9,9 +9,13 @@ void producer(sem_t *empty, sem_t *full, sem_t *mutex)
 	for (int i=0;i<2;i++)
 	{
 		sem_wait(empty);
+		sleep(128);
 		sem_wait(mutex);
+		sleep(128);
 		printf("Producer %d: produce\n", id);
+		sleep(128);
 		sem_post(mutex);
+		sleep(128);
 		sem_post(full);
 	}
 	return;
@@ -22,9 +26,13 @@ void consumer(sem_t *empty, sem_t *full, sem_t *mutex)
 	for (int i=0;i<10;i++)
 	{
 		sem_wait(full);
+		sleep(128);
 		sem_wait(mutex);
+		sleep(128);
 		printf("Consumer : consume\n");
+		sleep(128);
 		sem_post(mutex);
+		sleep(128);
 		sem_post(empty);
 	}
 	return;
@@ -32,7 +40,7 @@ void consumer(sem_t *empty, sem_t *full, sem_t *mutex)
 
 int main(void)
 {
-	// TODO in lab4
+	// TODO in lab4 done
 	printf("bounded_buffer\n");
 	sem_t empty;
 	sem_t full;
