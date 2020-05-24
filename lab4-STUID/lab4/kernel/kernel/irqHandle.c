@@ -286,7 +286,31 @@ void syscallWriteStdOut(struct TrapFrame *tf)
 
 void syscallWriteShMem(struct TrapFrame *tf)
 {
-    // TODO in lab4
+    // TODO in lab4 done
+    int sel = tf->ds;
+    char *str = (char *)tf->edx;
+    int size = tf->ebx;
+    int index = tf->esi;
+    int i = 0;
+    char character = 0;
+    // putInt(size);
+    // uint16_t data = 0;
+    asm volatile("movw %0, %%es" ::"m"(sel));
+    for (i = 0; i < size; i++)
+    {
+        if((index + i) < MAX_SHMEM_SIZE)
+        {
+            asm volatile("movb %%es:(%1), %0"
+                     : "=r"(character)
+                     : "r"(str + i));
+            // putChar(character);
+            shMem[index + i] = character;
+        }
+        else
+        {
+            break;
+        }
+    }
     return;
 }
 
@@ -363,7 +387,27 @@ void syscallReadStdIn(struct TrapFrame *tf)
 
 void syscallReadShMem(struct TrapFrame *tf)
 {
-    // TODO in lab4
+    // TODO in lab4 done
+    int sel = tf->ds;
+    int size = tf->ebx;
+    char *str = (char *)tf->edx;
+    char character = 0;
+    int index = tf->esi;
+    int i = 0;
+    asm volatile("movw %0, %%es" ::"m"(sel));
+    while (i < size)
+    {
+        if ((index + i) < MAX_SHMEM_SIZE)
+        {
+            character = shMem[index + i];
+            asm volatile("movb %0, %%es:(%1)" ::"r"(character), "r"(str + i));
+        }
+        else
+        {
+            break;
+        }
+        ++i;
+    }
     return;
 }
 
@@ -504,6 +548,7 @@ void syscallSem(struct TrapFrame *tf)
 void syscallSemInit(struct TrapFrame *tf)
 {
     // TODO in lab4
+    
     return;
 }
 
