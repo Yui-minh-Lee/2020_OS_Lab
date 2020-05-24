@@ -298,11 +298,11 @@ void syscallWriteShMem(struct TrapFrame *tf)
     asm volatile("movw %0, %%es" ::"m"(sel));
     for (i = 0; i < size; i++)
     {
-        if((index + i) < MAX_SHMEM_SIZE)
+        if ((index + i) < MAX_SHMEM_SIZE)
         {
             asm volatile("movb %%es:(%1), %0"
-                     : "=r"(character)
-                     : "r"(str + i));
+                         : "=r"(character)
+                         : "r"(str + i));
             // putChar(character);
             shMem[index + i] = character;
         }
@@ -547,26 +547,87 @@ void syscallSem(struct TrapFrame *tf)
 
 void syscallSemInit(struct TrapFrame *tf)
 {
-    // TODO in lab4
-    
+    // TODO in lab4 done
+    int i;
+    for (i = 0; i < MAX_SEM_NUM; i++)
+    {
+        if (sem[i].state == 0) // not in use
+            break;
+    }
+    if (i != MAX_SEM_NUM)
+    {
+        sem[i].state = 1;
+        sem[i].value = (int32_t)tf->edx;
+        sem[i].pcb.next = &(sem[i].pcb);
+        sem[i].pcb.prev = &(sem[i].pcb);
+        pcb[current].regs.eax = i;
+    }
+    else
+        pcb[current].regs.eax = -1;
     return;
 }
 
 void syscallSemWait(struct TrapFrame *tf)
 {
     // TODO in lab4
+    int i = tf->edx;
+    if (sem[i].state == 1)
+    {
+        sem[i].value--;
+        pcb[current].regs.eax = 0;
+        if (sem[i].value < 0)
+        {
+            pcb[current].blocked.next = sem[i].pcb.next;
+            pcb[current].blocked.prev = &(sem[i].pcb);
+            sem[i].pcb.next = &(pcb[current].blocked);
+            (pcb[current].blocked.next)->prev = &(pcb[current].blocked);
+
+            pcb[current].state = STATE_BLOCKED;
+			pcb[current].sleepTime = -1;
+            asm volatile("int $0x20");
+        }
+    }
+    else
+        pcb[current].regs.eax = -1;
     return;
 }
 
 void syscallSemPost(struct TrapFrame *tf)
 {
-    // TODO in lab4
+    // TODO in lab4 done
+    int i = tf->edx;
+    ProcessTable *pt = NULL;
+    if (sem[i].state == 1)
+    {
+        sem[i].value++;
+        pcb[current].regs.eax = 0;
+        if (sem[i].value <= 0)
+        {
+            pt = (ProcessTable *)((uint32_t)(sem[i].pcb.prev) - (uint32_t) &
+                                  (((ProcessTable *)0)->blocked));
+            sem[i].pcb.prev = (sem[i].pcb.prev)->prev;
+            (sem[i].pcb.prev)->next = &(sem[i].pcb);
+
+            pt->state = STATE_RUNNABLE;
+            pt->sleepTime = 0;
+        }
+    }
+    else
+        pcb[current].regs.eax = -1;
     return;
 }
 
 void syscallSemDestroy(struct TrapFrame *tf)
 {
     // TODO in lab4
+    int i = tf->edx;
+	if (sem[i].state == 1) {
+		sem[i].state = 0;
+        pcb[current].regs.eax = 0;
+		asm volatile("int $0x20");
+	}
+	else
+		pcb[current].regs.eax = -1;
     return;
 }
 
