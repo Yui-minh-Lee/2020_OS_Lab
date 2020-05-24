@@ -569,7 +569,7 @@ void syscallSemInit(struct TrapFrame *tf)
 
 void syscallSemWait(struct TrapFrame *tf)
 {
-    // TODO in lab4
+    // TODO in lab4 done
     int i = tf->edx;
     if (sem[i].state == 1)
     {
@@ -619,7 +619,7 @@ void syscallSemPost(struct TrapFrame *tf)
 
 void syscallSemDestroy(struct TrapFrame *tf)
 {
-    // TODO in lab4
+    // TODO in lab4 done
     int i = tf->edx;
 	if (sem[i].state == 1) {
 		sem[i].state = 0;
