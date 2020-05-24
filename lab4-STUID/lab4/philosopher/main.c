@@ -33,7 +33,7 @@ void philosopher(int i, sem_t forks[])
 
 int main(void)
 {
-	// TODO in lab4
+	// TODO in lab4 done
 	printf("philosopher\n");
 	int i = 0;
 	sem_t forks[5];
